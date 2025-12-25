@@ -1,4 +1,4 @@
-from calendar import calendar
+from calendar import calendar, day_name, weekday
 import holidays
 
 year = 0
@@ -14,6 +14,7 @@ while(True):
 south_africa_holidays = holidays.SouthAfrica(years=year)
 
 for date, name in sorted(south_africa_holidays.items()):
-    print(f"{date}: {name}")
+    day_of_week = day_name[weekday(date.year, date.month, date.day)]
+    print(f"{day_of_week} - {date}: {name}")
 
-print(calendar(year))
+#print(calendar(year))
