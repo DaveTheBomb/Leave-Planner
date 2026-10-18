@@ -9,6 +9,11 @@ get_holiday_dates = lp.get_holiday_dates
 get_day_of_week = lp.get_day_of_week
 calculate_gaps = lp.calculate_gaps
 filter_gaps_by_leave = lp.filter_gaps_by_leave
+is_weekend = lp.is_weekend
+calculate_break_length = lp.calculate_break_length
+get_best_breaks = lp.get_best_breaks
+validate_year = lp.validate_year
+validate_leave_days = lp.validate_leave_days
 
 
 class TestGetHolidays(unittest.TestCase):
@@ -17,7 +22,6 @@ class TestGetHolidays(unittest.TestCase):
         result = get_holidays(2026)
         self.assertIsInstance(result, list)
         self.assertGreater(len(result), 0)
-        # Each item should be a (date, str) tuple
         for item in result:
             self.assertEqual(len(item), 2)
             self.assertIsInstance(item[1], str)
@@ -74,7 +78,6 @@ class TestCalculateGaps(unittest.TestCase):
     def test_gap_count(self):
         dates = [date(2026, 1, 1), date(2026, 1, 10), date(2026, 1, 20)]
         gaps = calculate_gaps(dates)
-        # n dates → n-1 gaps
         self.assertEqual(len(gaps), 2)
 
     def test_gap_days_calculation(self):
@@ -97,7 +100,6 @@ class TestCalculateGaps(unittest.TestCase):
     def test_gap_contains_labels(self):
         dates = [date(2026, 1, 1), date(2026, 1, 6)]
         gaps = calculate_gaps(dates)
-        # Each gap entry has 3 elements: [leave_days, from_label, to_label]
         self.assertEqual(len(gaps[0]), 3)
         self.assertIn("2026-01-01", gaps[0][1])
         self.assertIn("2026-01-06", gaps[0][2])
@@ -132,6 +134,228 @@ class TestFilterGapsByLeave(unittest.TestCase):
 
     def test_empty_gaps(self):
         self.assertEqual(filter_gaps_by_leave([], 5), [])
+
+
+class TestIsWeekend(unittest.TestCase):
+
+    def test_saturday_is_weekend(self):
+        # 2026-01-03 is a Saturday
+        self.assertTrue(is_weekend(date(2026, 1, 3)))
+
+    def test_sunday_is_weekend(self):
+        # 2026-01-04 is a Sunday
+        self.assertTrue(is_weekend(date(2026, 1, 4)))
+
+    def test_monday_is_not_weekend(self):
+        # 2026-01-05 is a Monday
+        self.assertFalse(is_weekend(date(2026, 1, 5)))
+
+    def test_friday_is_not_weekend(self):
+        # 2026-01-02 is a Friday
+        self.assertFalse(is_weekend(date(2026, 1, 2)))
+
+
+class TestCalculateBreakLength(unittest.TestCase):
+
+    def test_zero_leave_days_adjacent_holidays(self):
+        # Thursday 2026-01-01 and Friday 2026-01-02: no weekdays between them
+        holiday_dates = [date(2026, 1, 1), date(2026, 1, 2)]
+        result = calculate_break_length(date(2026, 1, 1), date(2026, 1, 2), holiday_dates)
+        self.assertEqual(result["leave_days_needed"], 0)
+
+    def test_break_extends_backwards_over_weekend(self):
+        # Holiday on Monday 2026-01-05: break should extend back to Saturday 2026-01-03
+        holiday_dates = [date(2026, 1, 5), date(2026, 1, 26)]
+        result = calculate_break_length(date(2026, 1, 5), date(2026, 1, 26), holiday_dates)
+        self.assertEqual(result["break_start"], date(2026, 1, 3))  # Saturday before Monday
+
+    def test_break_extends_forwards_over_weekend(self):
+        # Holiday on Friday 2026-01-02: break should extend forward to Sunday 2026-01-04
+        holiday_dates = [date(2026, 1, 1), date(2026, 1, 2)]
+        result = calculate_break_length(date(2026, 1, 1), date(2026, 1, 2), holiday_dates)
+        self.assertEqual(result["break_end"], date(2026, 1, 4))  # Sunday after Friday
+
+    def test_leave_days_excludes_weekends(self):
+        # 2026-01-08 (Thursday) to 2026-01-16 (Friday):
+        # weekdays between: Fri 9, Mon 12, Tue 13, Wed 14, Thu 15 = 5 leave days
+        holiday_dates = [date(2026, 1, 8), date(2026, 1, 16)]
+        result = calculate_break_length(date(2026, 1, 8), date(2026, 1, 16), holiday_dates)
+        self.assertEqual(result["leave_days_needed"], 5)
+
+    def test_total_break_days_is_positive(self):
+        holiday_dates = [date(2026, 1, 1), date(2026, 1, 26)]
+        result = calculate_break_length(date(2026, 1, 1), date(2026, 1, 26), holiday_dates)
+        self.assertGreater(result["total_break_days"], 0)
+
+    def test_break_start_lte_holiday_start(self):
+        holiday_dates = [date(2026, 1, 1), date(2026, 1, 26)]
+        result = calculate_break_length(date(2026, 1, 1), date(2026, 1, 26), holiday_dates)
+        self.assertLessEqual(result["break_start"], date(2026, 1, 1))
+
+    def test_break_end_gte_holiday_end(self):
+        holiday_dates = [date(2026, 1, 1), date(2026, 1, 26)]
+        result = calculate_break_length(date(2026, 1, 1), date(2026, 1, 26), holiday_dates)
+        self.assertGreaterEqual(result["break_end"], date(2026, 1, 26))
+
+    def test_returns_required_keys(self):
+        holiday_dates = [date(2026, 1, 1), date(2026, 1, 2)]
+        result = calculate_break_length(date(2026, 1, 1), date(2026, 1, 2), holiday_dates)
+        self.assertIn("leave_days_needed", result)
+        self.assertIn("total_break_days", result)
+        self.assertIn("break_start", result)
+        self.assertIn("break_end", result)
+
+    def test_leave_days_excludes_public_holidays_in_gap(self):
+        # If a public holiday falls within the gap, it should not count as a leave day
+        # 2026-01-01 (Thu) → 2026-01-26 (Mon), with 2026-01-02 (Fri) also a holiday
+        holiday_dates = [date(2026, 1, 1), date(2026, 1, 2), date(2026, 1, 26)]
+        result = calculate_break_length(date(2026, 1, 1), date(2026, 1, 2), holiday_dates)
+        # No weekdays between Jan 1 and Jan 2 that aren't holidays
+        self.assertEqual(result["leave_days_needed"], 0)
+
+
+class TestGetBestBreaks(unittest.TestCase):
+
+    def test_returns_list(self):
+        holiday_dates = get_holiday_dates(2026)
+        result = get_best_breaks(holiday_dates, 5)
+        self.assertIsInstance(result, list)
+
+    def test_sorted_by_total_break_days_descending(self):
+        holiday_dates = get_holiday_dates(2026)
+        result = get_best_breaks(holiday_dates, 10)
+        totals = [b["total_break_days"] for b in result]
+        self.assertEqual(totals, sorted(totals, reverse=True))
+
+    def test_all_results_within_leave_budget(self):
+        holiday_dates = get_holiday_dates(2026)
+        available = 3
+        result = get_best_breaks(holiday_dates, available)
+        for b in result:
+            self.assertLessEqual(b["leave_days_needed"], available)
+
+    def test_zero_leave_days_returns_free_bridges_only(self):
+        holiday_dates = get_holiday_dates(2026)
+        result = get_best_breaks(holiday_dates, 0)
+        for b in result:
+            self.assertEqual(b["leave_days_needed"], 0)
+
+    def test_no_breaks_when_leave_is_negative(self):
+        holiday_dates = get_holiday_dates(2026)
+        result = get_best_breaks(holiday_dates, -1)
+        self.assertEqual(result, [])
+
+    def test_each_result_has_required_keys(self):
+        holiday_dates = get_holiday_dates(2026)
+        result = get_best_breaks(holiday_dates, 5)
+        for b in result:
+            self.assertIn("leave_days_needed", b)
+            self.assertIn("total_break_days", b)
+            self.assertIn("break_start", b)
+            self.assertIn("break_end", b)
+            self.assertIn("holiday_start", b)
+            self.assertIn("holiday_end", b)
+
+
+class TestValidateYear(unittest.TestCase):
+
+    def test_valid_year(self):
+        year, error = validate_year("2026")
+        self.assertEqual(year, 2026)
+        self.assertIsNone(error)
+
+    def test_lower_boundary(self):
+        year, error = validate_year("2000")
+        self.assertEqual(year, 2000)
+        self.assertIsNone(error)
+
+    def test_upper_boundary(self):
+        year, error = validate_year("2100")
+        self.assertEqual(year, 2100)
+        self.assertIsNone(error)
+
+    def test_year_too_low(self):
+        year, error = validate_year("1999")
+        self.assertIsNone(year)
+        self.assertIsNotNone(error)
+
+    def test_year_too_high(self):
+        year, error = validate_year("2101")
+        self.assertIsNone(year)
+        self.assertIsNotNone(error)
+
+    def test_non_integer_string(self):
+        year, error = validate_year("abc")
+        self.assertIsNone(year)
+        self.assertIsNotNone(error)
+
+    def test_float_string(self):
+        year, error = validate_year("2026.5")
+        self.assertIsNone(year)
+        self.assertIsNotNone(error)
+
+    def test_empty_string(self):
+        year, error = validate_year("")
+        self.assertIsNone(year)
+        self.assertIsNotNone(error)
+
+    def test_none_input(self):
+        year, error = validate_year(None)
+        self.assertIsNone(year)
+        self.assertIsNotNone(error)
+
+    def test_negative_year(self):
+        year, error = validate_year("-100")
+        self.assertIsNone(year)
+        self.assertIsNotNone(error)
+
+
+class TestValidateLeaveDays(unittest.TestCase):
+
+    def test_valid_leave_days(self):
+        days, error = validate_leave_days("10")
+        self.assertEqual(days, 10)
+        self.assertIsNone(error)
+
+    def test_zero_leave_days(self):
+        days, error = validate_leave_days("0")
+        self.assertEqual(days, 0)
+        self.assertIsNone(error)
+
+    def test_max_leave_days(self):
+        days, error = validate_leave_days("365")
+        self.assertEqual(days, 365)
+        self.assertIsNone(error)
+
+    def test_negative_leave_days(self):
+        days, error = validate_leave_days("-1")
+        self.assertIsNone(days)
+        self.assertIsNotNone(error)
+
+    def test_exceeds_max_leave_days(self):
+        days, error = validate_leave_days("366")
+        self.assertIsNone(days)
+        self.assertIsNotNone(error)
+
+    def test_non_integer_string(self):
+        days, error = validate_leave_days("five")
+        self.assertIsNone(days)
+        self.assertIsNotNone(error)
+
+    def test_float_string(self):
+        days, error = validate_leave_days("5.5")
+        self.assertIsNone(days)
+        self.assertIsNotNone(error)
+
+    def test_empty_string(self):
+        days, error = validate_leave_days("")
+        self.assertIsNone(days)
+        self.assertIsNotNone(error)
+
+    def test_none_input(self):
+        days, error = validate_leave_days(None)
+        self.assertIsNone(days)
+        self.assertIsNotNone(error)
 
 
 if __name__ == "__main__":
