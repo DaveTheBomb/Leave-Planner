@@ -158,11 +158,11 @@ def find_all_breaks(year, available_leave_days):
     Slide a window of exactly `available_leave_days` leave days across every
     weekday in the year. For each placement, compute the full continuous break
     (including attached weekends and public holidays). Deduplicate by
-    (break_start, break_end) and return results sorted by total_break_days
-    descending, filtered to only those that use <= available_leave_days.
+    (break_start, break_end) and remove dominated breaks — those whose date
+    range is fully contained within a longer break achievable with the same
+    or fewer leave days.
 
-    This catches breaks that are not anchored between two public holidays,
-    such as taking leave before a holiday cluster to extend the run-up.
+    Returns results sorted by total_break_days descending.
     """
     holiday_dates = get_holiday_dates(year)
     holiday_set = set(holiday_dates)
@@ -201,7 +201,34 @@ def find_all_breaks(year, available_leave_days):
                 if key not in seen or result["leave_days_needed"] < seen[key]["leave_days_needed"]:
                     seen[key] = result
 
-    results = sorted(seen.values(), key=lambda x: x["total_break_days"], reverse=True)
+    candidates = list(seen.values())
+
+    # Remove dominated breaks: if break A is fully contained within break B
+    # and B costs no more leave days than A, then A is dominated and should
+    # be dropped — it is a strictly worse option.
+    def is_dominated(a, all_breaks):
+        for b in all_breaks:
+            if b is a:
+                continue
+            if (b["break_start"] <= a["break_start"]
+                    and b["break_end"] >= a["break_end"]
+                    and b["total_break_days"] > a["total_break_days"]
+                    and b["leave_days_needed"] <= a["leave_days_needed"]):
+                return True
+        return False
+
+    # Only keep breaks that are better than the plain baseline:
+    # The best you can get from N leave days with no holiday help is:
+    # 2 weekend days before + N leave days + 2 weekend days after = N + 4.
+    # Any break that doesn't beat this is just a plain work week and adds
+    # no strategic value.
+    def beats_baseline(b):
+        if n == 0:
+            return True
+        return b["total_break_days"] > n + 4
+
+    results = [b for b in candidates if not is_dominated(b, candidates) and beats_baseline(b)]
+    results.sort(key=lambda x: x["total_break_days"], reverse=True)
     return results
 
 
