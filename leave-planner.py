@@ -109,6 +109,102 @@ def filter_gaps_by_leave(gaps, available_leave_days):
     return [gap for gap in gaps if gap[0] <= available_leave_days]
 
 
+def compute_break_for_window(leave_start, leave_end, holiday_set):
+    """
+    Given a window of leave days (leave_start to leave_end inclusive),
+    extend the break backwards and forwards over weekends and holidays,
+    then return a dict describing the full continuous break.
+    """
+    # Extend backwards
+    break_start = leave_start
+    while True:
+        prev = break_start - timedelta(days=1)
+        if is_weekend(prev) or prev in holiday_set:
+            break_start = prev
+        else:
+            break
+
+    # Extend forwards
+    break_end = leave_end
+    while True:
+        nxt = break_end + timedelta(days=1)
+        if is_weekend(nxt) or nxt in holiday_set:
+            break_end = nxt
+        else:
+            break
+
+    # Count actual leave days used in the window (excludes weekends/holidays)
+    leave_days_used = 0
+    current = leave_start
+    while current <= leave_end:
+        if not is_weekend(current) and current not in holiday_set:
+            leave_days_used += 1
+        current += timedelta(days=1)
+
+    total_break_days = (break_end - break_start).days + 1
+
+    return {
+        "leave_days_needed": leave_days_used,
+        "total_break_days": total_break_days,
+        "break_start": break_start,
+        "break_end": break_end,
+        "leave_start": leave_start,
+        "leave_end": leave_end,
+    }
+
+
+def find_all_breaks(year, available_leave_days):
+    """
+    Slide a window of exactly `available_leave_days` leave days across every
+    weekday in the year. For each placement, compute the full continuous break
+    (including attached weekends and public holidays). Deduplicate by
+    (break_start, break_end) and return results sorted by total_break_days
+    descending, filtered to only those that use <= available_leave_days.
+
+    This catches breaks that are not anchored between two public holidays,
+    such as taking leave before a holiday cluster to extend the run-up.
+    """
+    holiday_dates = get_holiday_dates(year)
+    holiday_set = set(holiday_dates)
+
+    # Build the list of all workdays (weekdays that are not public holidays)
+    workdays = []
+    current = date(year, 1, 1)
+    end_of_year = date(year, 12, 31)
+    while current <= end_of_year:
+        if not is_weekend(current) and current not in holiday_set:
+            workdays.append(current)
+        current += timedelta(days=1)
+
+    seen = {}  # key: (break_start, break_end) -> best result
+
+    # Slide a window of exactly `available_leave_days` workdays
+    n = available_leave_days
+
+    # Guard against invalid input
+    if n < 0:
+        return []
+    if n == 0:
+        # No leave days: check each holiday/weekend cluster for free breaks
+        for h in holiday_dates:
+            result = compute_break_for_window(h, h, holiday_set)
+            key = (result["break_start"], result["break_end"])
+            if key not in seen or result["total_break_days"] > seen[key]["total_break_days"]:
+                seen[key] = result
+    else:
+        for i in range(len(workdays) - n + 1):
+            leave_start = workdays[i]
+            leave_end = workdays[i + n - 1]
+            result = compute_break_for_window(leave_start, leave_end, holiday_set)
+            if result["leave_days_needed"] <= available_leave_days:
+                key = (result["break_start"], result["break_end"])
+                if key not in seen or result["leave_days_needed"] < seen[key]["leave_days_needed"]:
+                    seen[key] = result
+
+    results = sorted(seen.values(), key=lambda x: x["total_break_days"], reverse=True)
+    return results
+
+
 def validate_year(value):
     """
     Validate a year input.
@@ -191,19 +287,25 @@ def main():
         else:
             break
 
-    best_breaks = get_best_breaks(holiday_dates, number_of_leave_days)
+    best_breaks = find_all_breaks(year, number_of_leave_days)
 
     if not best_breaks:
-        print("No bridgeable holiday pairs found with your available leave days.")
+        print("No breaks found with your available leave days.")
         return
 
     print(f"\nTop breaks you can get with {number_of_leave_days} leave day(s), ranked by length:\n")
     for i, b in enumerate(best_breaks, start=1):
+        if number_of_leave_days == 0:
+            leave_info = "no leave days needed"
+        else:
+            leave_info = (
+                f"use {b['leave_days_needed']} leave day(s): "
+                f"{b['leave_start']} to {b['leave_end']}"
+            )
         print(
             f"  {i}. {b['total_break_days']}-day break  "
             f"({b['break_start']} to {b['break_end']})  "
-            f"| Use {b['leave_days_needed']} leave day(s) between "
-            f"{b['holiday_start']} and {b['holiday_end']}"
+            f"| {leave_info}"
         )
 
     print("\n*************************************************************************************")

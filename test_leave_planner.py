@@ -14,6 +14,8 @@ calculate_break_length = lp.calculate_break_length
 get_best_breaks = lp.get_best_breaks
 validate_year = lp.validate_year
 validate_leave_days = lp.validate_leave_days
+compute_break_for_window = lp.compute_break_for_window
+find_all_breaks = lp.find_all_breaks
 
 
 class TestGetHolidays(unittest.TestCase):
@@ -356,6 +358,95 @@ class TestValidateLeaveDays(unittest.TestCase):
         days, error = validate_leave_days(None)
         self.assertIsNone(days)
         self.assertIsNotNone(error)
+
+
+class TestComputeBreakForWindow(unittest.TestCase):
+
+    def test_returns_required_keys(self):
+        holiday_set = set()
+        # 2026-01-12 Monday to 2026-01-14 Wednesday
+        result = compute_break_for_window(date(2026, 1, 12), date(2026, 1, 14), holiday_set)
+        for key in ["leave_days_needed", "total_break_days", "break_start", "break_end", "leave_start", "leave_end"]:
+            self.assertIn(key, result)
+
+    def test_extends_backwards_over_weekend(self):
+        # Leave starts Monday 2026-01-05: break should reach back to Saturday 2026-01-03
+        holiday_set = set()
+        result = compute_break_for_window(date(2026, 1, 5), date(2026, 1, 7), holiday_set)
+        self.assertEqual(result["break_start"], date(2026, 1, 3))
+
+    def test_extends_forwards_over_weekend(self):
+        # Leave ends Friday 2026-01-09: break should extend to Sunday 2026-01-11
+        holiday_set = set()
+        result = compute_break_for_window(date(2026, 1, 7), date(2026, 1, 9), holiday_set)
+        self.assertEqual(result["break_end"], date(2026, 1, 11))
+
+    def test_leave_days_excludes_weekends_in_window(self):
+        # Window Mon 2026-01-05 to Fri 2026-01-09: 5 workdays, no holidays
+        holiday_set = set()
+        result = compute_break_for_window(date(2026, 1, 5), date(2026, 1, 9), holiday_set)
+        self.assertEqual(result["leave_days_needed"], 5)
+
+    def test_leave_days_excludes_holidays_in_window(self):
+        # Window Mon 2026-03-30 to Fri 2026-04-03: Good Friday (Apr 3) is a holiday
+        holiday_set = {date(2026, 4, 3)}
+        result = compute_break_for_window(date(2026, 3, 30), date(2026, 4, 3), holiday_set)
+        # Mon, Tue, Wed, Thu = 4 leave days (Good Friday excluded)
+        self.assertEqual(result["leave_days_needed"], 4)
+
+    def test_total_break_days_greater_than_window(self):
+        # Any window touching a weekend should yield more total days than workdays used
+        holiday_set = set()
+        result = compute_break_for_window(date(2026, 1, 5), date(2026, 1, 9), holiday_set)
+        self.assertGreater(result["total_break_days"], result["leave_days_needed"])
+
+
+class TestFindAllBreaks(unittest.TestCase):
+
+    def test_returns_list(self):
+        result = find_all_breaks(2026, 5)
+        self.assertIsInstance(result, list)
+
+    def test_sorted_by_total_break_days_descending(self):
+        result = find_all_breaks(2026, 5)
+        totals = [b["total_break_days"] for b in result]
+        self.assertEqual(totals, sorted(totals, reverse=True))
+
+    def test_all_results_within_leave_budget(self):
+        available = 3
+        result = find_all_breaks(2026, available)
+        for b in result:
+            self.assertLessEqual(b["leave_days_needed"], available)
+
+    def test_finds_11_day_break_with_5_leave_days(self):
+        # Taking 5 leave days from 27 Mar 2026 should yield an 11-day break
+        result = find_all_breaks(2026, 5)
+        eleven_day = [
+            b for b in result
+            if b["break_start"] == date(2026, 3, 27) and b["break_end"] == date(2026, 4, 6)
+        ]
+        self.assertTrue(len(eleven_day) > 0, "Expected 11-day break (27 Mar – 6 Apr) not found")
+        self.assertEqual(eleven_day[0]["total_break_days"], 11)
+
+    def test_no_breaks_for_negative_leave(self):
+        result = find_all_breaks(2026, -1)
+        self.assertEqual(result, [])
+
+    def test_zero_leave_returns_free_clusters(self):
+        result = find_all_breaks(2026, 0)
+        for b in result:
+            self.assertEqual(b["leave_days_needed"], 0)
+
+    def test_each_result_has_required_keys(self):
+        result = find_all_breaks(2026, 3)
+        for b in result:
+            for key in ["leave_days_needed", "total_break_days", "break_start", "break_end", "leave_start", "leave_end"]:
+                self.assertIn(key, b)
+
+    def test_no_duplicate_break_windows(self):
+        result = find_all_breaks(2026, 5)
+        keys = [(b["break_start"], b["break_end"]) for b in result]
+        self.assertEqual(len(keys), len(set(keys)))
 
 
 if __name__ == "__main__":
