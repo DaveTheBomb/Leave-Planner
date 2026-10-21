@@ -52,6 +52,26 @@ with col2:
         step=1,
     )
 
+st.markdown(
+    """
+    <style>
+    button[kind="primary"] {
+        background-color: #28a745 !important;
+        border-color: #28a745 !important;
+        color: white !important;
+    }
+    button[kind="primary"]:hover {
+        background-color: #218838 !important;
+        border-color: #1e7e34 !important;
+    }
+    button[kind="primary"]:active {
+        background-color: #1e7e34 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 find_btn = st.button("🔍 Find Best Breaks", use_container_width=True, type="primary")
 
 st.divider()
