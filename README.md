@@ -5,7 +5,6 @@ This project is designed to help individuals strategically plan their leave days
 ## Requirements
 
 - Python 3.x
-- `holidays` library
 
 ## Installation
 
@@ -15,9 +14,24 @@ This project is designed to help individuals strategically plan their leave days
    cd Leave-Planner
    ```
 
-2. Install the required dependency:
+2. Create and activate a virtual environment:
    ```bash
-   pip install holidays
+   python -m venv .venv
+   ```
+
+   On Windows (PowerShell):
+   ```powershell
+   .venv\bin\Activate.ps1
+   ```
+
+   On macOS/Linux:
+   ```bash
+   source .venv/bin/activate
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
    ```
 
 ## How to Run
