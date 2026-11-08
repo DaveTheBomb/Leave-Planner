@@ -147,3 +147,33 @@ Double-click `LeavePlanner.exe` — it will start the server in the background a
 Zip the entire `dist\LeavePlanner\` folder and share it. Recipients just unzip and run `LeavePlanner.exe`. No Python installation required.
 
 > **Note:** The build output (`dist/` and `build/`) is excluded from version control via `.gitignore`. Only share the zipped folder as a GitHub Release asset.
+
+---
+
+## Building the Windows Installer (v1.1.0+)
+
+You can wrap the exe bundle into a standard Windows installer (`LeavePlannerSetup.exe`) using NSIS.
+
+### Prerequisites
+
+1. Build the PyInstaller bundle first (see above)
+2. Install [NSIS](https://nsis.sourceforge.io/Download) (free)
+
+### Build the installer
+
+```powershell
+makensis installer.nsi
+```
+
+This produces `LeavePlannerSetup.exe` in the project root.
+
+### What the installer does
+
+- Installs to `C:\Program Files\Leave Planner\`
+- Creates a Start Menu shortcut
+- Creates a Desktop shortcut
+- Registers the app in Add/Remove Programs (with a clean uninstaller)
+
+### Distributing
+
+Upload `LeavePlannerSetup.exe` as a GitHub Release asset. Users download and double-click it — standard Windows install experience.

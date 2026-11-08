@@ -14,3 +14,7 @@ __pycache__/
 dist/
 build/
 *.spec.bak
+
+
+# NSIS installer output
+LeavePlannerSetup.exe
