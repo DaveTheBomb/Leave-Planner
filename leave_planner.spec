@@ -49,6 +49,9 @@ hiddenimports += [
     "uvicorn.protocols.websockets.auto",
     "starlette",
     "click",
+    "click.testing",
+    "streamlit.web.cli",
+    "streamlit.web.bootstrap",
 ]
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
