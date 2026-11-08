@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import streamlit as st
+from version import __version__
 
 # Import core logic from leave-planner.py (hyphen in filename requires importlib)
 _spec = importlib.util.spec_from_file_location(
@@ -27,7 +28,7 @@ st.set_page_config(
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("🗓️ Leave Planner")
-st.caption("Maximise your time off by aligning leave with public holidays.")
+st.caption(f"Maximise your time off by aligning leave with public holidays. · v{__version__}")
 
 st.divider()
 
