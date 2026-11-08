@@ -8,7 +8,7 @@ Build command:
 
 import sys
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, collect_all
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 ROOT = Path(SPECPATH)
@@ -17,10 +17,30 @@ ROOT = Path(SPECPATH)
 # Streamlit ships static web assets and its own config that must travel
 # alongside the binary.
 datas = []
+binaries = []
+hiddenimports = []
+
+# numpy and pandas use C extensions that PyInstaller misses without collect_all
+tmp_ret = collect_all("numpy")
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
+tmp_ret = collect_all("pandas")
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+
 datas += collect_data_files("streamlit")
 datas += collect_data_files("holidays")
 datas += collect_data_files("altair")
 datas += collect_data_files("pyarrow")
+
+# Package metadata (.dist-info) required by importlib.metadata at runtime.
+# Without these, streamlit/__init__.py raises PackageNotFoundError on startup.
+import site
+site_packages = Path(site.getsitepackages()[0])
+for pkg in ("streamlit-1.66.1", "holidays-0.107", "pandas-3.0.6",
+            "altair-6.3.0", "pyarrow-26.0.0"):
+    dist_info = site_packages / f"{pkg}.dist-info"
+    if dist_info.exists():
+        datas.append((str(dist_info), f"{pkg}.dist-info"))
 
 # Bundle the app source files so launcher.py can locate them at runtime
 datas += [
@@ -32,11 +52,9 @@ datas += [
 # ── Hidden imports ────────────────────────────────────────────────────────────
 # Streamlit and its dependencies use dynamic imports that PyInstaller
 # cannot detect statically.
-hiddenimports = []
 hiddenimports += collect_submodules("streamlit")
 hiddenimports += collect_submodules("holidays")
 hiddenimports += [
-    "pandas",
     "pyarrow",
     "altair",
     "importlib.util",
@@ -49,13 +67,16 @@ hiddenimports += [
     "uvicorn.protocols.websockets.auto",
     "starlette",
     "click",
+    "click.testing",
+    "streamlit.web.cli",
+    "streamlit.web.bootstrap",
 ]
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(
     [str(ROOT / "launcher.py")],
     pathex=[str(ROOT)],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
