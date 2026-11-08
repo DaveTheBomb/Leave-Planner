@@ -9,3 +9,8 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+
+# PyInstaller build output
+dist/
+build/
+*.spec.bak

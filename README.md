@@ -114,3 +114,36 @@ Leave-Planner/
 ```bash
 python -m unittest test_leave_planner.py
 ```
+
+---
+
+## Building the Windows Executable (v1.1.0+)
+
+You can package the app into a standalone Windows folder that runs without Python installed.
+
+### Prerequisites
+
+Install PyInstaller into your virtual environment:
+
+```powershell
+.venv\Scripts\Activate.ps1
+pip install pyinstaller==6.11.1
+```
+
+### Build
+
+```powershell
+.venv\Scripts\pyinstaller.exe leave_planner.spec
+```
+
+The output will be in `dist\LeavePlanner\`. The folder contains `LeavePlanner.exe` and all required files.
+
+### Running the exe
+
+Double-click `LeavePlanner.exe` — it will start the server in the background and open your browser automatically. No console window appears.
+
+### Distributing
+
+Zip the entire `dist\LeavePlanner\` folder and share it. Recipients just unzip and run `LeavePlanner.exe`. No Python installation required.
+
+> **Note:** The build output (`dist/` and `build/`) is excluded from version control via `.gitignore`. Only share the zipped folder as a GitHub Release asset.
