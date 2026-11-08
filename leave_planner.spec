@@ -22,6 +22,16 @@ datas += collect_data_files("holidays")
 datas += collect_data_files("altair")
 datas += collect_data_files("pyarrow")
 
+# Package metadata (.dist-info) required by importlib.metadata at runtime.
+# Without these, streamlit/__init__.py raises PackageNotFoundError on startup.
+import site
+site_packages = Path(site.getsitepackages()[0])
+for pkg in ("streamlit-1.66.1", "holidays-0.107", "pandas-3.0.6",
+            "altair-6.3.0", "pyarrow-26.0.0"):
+    dist_info = site_packages / f"{pkg}.dist-info"
+    if dist_info.exists():
+        datas.append((str(dist_info), f"{pkg}.dist-info"))
+
 # Bundle the app source files so launcher.py can locate them at runtime
 datas += [
     (str(ROOT / "app.py"),           "."),
