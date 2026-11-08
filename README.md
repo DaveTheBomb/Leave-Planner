@@ -1,10 +1,25 @@
-## Project Description
+# 🗓️ Leave Planner
 
-This project is designed to help individuals strategically plan their leave days to maximize time off by aligning annual leave with public holidays and weekends. The tool analyzes available leave balances, upcoming public holidays, and calendar patterns to suggest optimal leave combinations that provide the longest possible break using the fewest number of leave days. It offers customizable options based on country-specific holidays, work policies, and personal preferences. The goal of the project is to make leave planning smarter, more efficient, and stress-free, ensuring users get the most rest and value out of their available leave days.
+Strategically plan your leave days to maximise time off by aligning annual leave with public holidays and weekends.
+
+The tool analyses your available leave balance and South African public holidays to suggest the best leave combinations — giving you the longest possible break for the fewest leave days used.
+
+---
+
+## Features
+
+- Ranked list of break opportunities from longest to shortest
+- Covers all South African public holidays
+- Accounts for weekends automatically attached to the break
+- Web UI (Streamlit) and CLI both available
+
+---
 
 ## Requirements
 
-- Python 3.x
+- Python 3.8+
+
+---
 
 ## Installation
 
@@ -21,7 +36,7 @@ This project is designed to help individuals strategically plan their leave days
 
    On Windows (PowerShell):
    ```powershell
-   .venv\bin\Activate.ps1
+   .venv\Scripts\Activate.ps1
    ```
 
    On macOS/Linux:
@@ -34,69 +49,68 @@ This project is designed to help individuals strategically plan their leave days
    pip install -r requirements.txt
    ```
 
-## How to Run
+---
 
-1. Run the script from the project directory:
-   ```bash
-   python leave-planner.py
-   ```
+## Usage
 
-2. When prompted, enter the **year** you want to plan leave for:
-   ```
-   Enter year: 2026
-   ```
+### Web UI (recommended)
 
-3. The tool will display all South African public holidays for that year, along with the day of the week each falls on.
+```bash
+streamlit run app.py
+```
 
-4. When prompted, enter your **number of available leave days**:
-   ```
-   Enter number of leave days available: 5
-   ```
+The app will open in your browser. Select a year, enter your available leave days, and click **Find Best Breaks**.
 
-5. The tool will display all possible breaks ranked from longest to shortest, showing how many leave days each one requires.
+### CLI
 
-## How the App Calculates the Longest Break
+```bash
+python leave-planner.py
+```
 
-The app works out the true length of the break you would get by taking leave between two public holidays — not just the raw gap, but the full continuous stretch of days off including attached weekends.
+Follow the prompts to enter the year and your available leave days. Results are printed to the terminal.
+
+---
+
+## How It Works
+
+The app finds every pair of consecutive public holidays and calculates how many weekdays you'd need to take as leave to bridge the gap. It then extends each break over any attached weekends or adjacent holidays to give you the true continuous stretch of days off.
 
 ### Step-by-step logic
 
-**1. Identify consecutive public holiday pairs**
-
-The app fetches all public holidays for the chosen year and looks at every pair of consecutive holidays. These are the opportunities to "bridge" a gap with leave days.
-
-**2. Count leave days needed**
-
-For each pair, it counts only the weekdays strictly between the two holidays that are not themselves public holidays. These are the days you would need to use as leave to fill the gap.
-
-**3. Extend the break over attached weekends and holidays**
-
-The raw gap between two holidays understates the real break. If a holiday falls on a Wednesday, you also get Tuesday (leave), Monday (leave) — and the Saturday and Sunday before that are free too. The app walks:
-- **Backwards** from the first holiday: if the day before is a weekend or another public holiday, include it in the break start.
-- **Forwards** from the second holiday: if the day after is a weekend or another public holiday, include it in the break end.
-
-This gives the true `break_start` and `break_end` of the continuous stretch of days off.
-
-**4. Calculate total break length**
-
-```
-total_break_days = (break_end - break_start).days + 1
-```
-
-**5. Filter by available leave days**
-
-Only breaks that require fewer or equal leave days to the number you entered are shown.
-
-**6. Rank by total break length**
-
-Results are sorted from longest to shortest break, so the best option is always shown first.
+1. **Identify consecutive public holiday pairs** — every pair of holidays is a potential bridge opportunity.
+2. **Count leave days needed** — only the weekdays strictly between the two holidays that are not themselves public holidays.
+3. **Extend over attached weekends and holidays** — walk backwards from the first holiday and forwards from the second to include any free days on either side.
+4. **Calculate total break length** — `(break_end - break_start).days + 1`
+5. **Filter by available leave days** — only show breaks you can actually afford.
+6. **Rank by total break length** — best option always shown first.
 
 ### Example
 
-Say there is a public holiday on Thursday 2026-03-19 and another on Monday 2026-03-23:
+Public holiday on Thursday 2026-03-19, another on Monday 2026-03-23:
 
-- Leave days needed: Friday 2026-03-20 = **1 leave day**
-- Walk backwards from Thursday: Wednesday is a normal workday, so break starts on Thursday 2026-03-19
-- Walk forwards from Monday: Tuesday is a normal workday, so break ends on Monday 2026-03-23
-- But Saturday 2026-03-21 and Sunday 2026-03-22 are free anyway
-- Total break: Thu 19 → Mon 23 = **5 days** off using just 1 leave day
+| | |
+|---|---|
+| Leave days needed | Friday 2026-03-20 = **1 day** |
+| Weekend included | Sat 21 + Sun 22 are free |
+| Total break | Thu 19 → Mon 23 = **5 days off** |
+
+---
+
+## Project Structure
+
+```
+Leave-Planner/
+├── app.py              # Streamlit web UI
+├── leave-planner.py    # Core logic + CLI entry point
+├── version.py          # Version number
+├── requirements.txt    # Direct dependencies
+└── test_leave_planner.py
+```
+
+---
+
+## Running Tests
+
+```bash
+python -m unittest test_leave_planner.py
+```
